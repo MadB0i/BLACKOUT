@@ -4,6 +4,11 @@
   "private": true,
   "description": "BLACKOUT — Break the Internet. Watch what survives. A cinematic educational Internet-infrastructure failure simulator.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MadB0i/BLACKOUT.git"
+  },
+  "homepage": "https://madb0i.github.io/BLACKOUT/",
   "type": "module",
   "scripts": {
     "dev": "vite",
