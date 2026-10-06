@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#05070b"/>
+  <circle cx="600" cy="330" r="180" fill="none" stroke="#1c2530" stroke-width="2"/>
+  <circle cx="600" cy="330" r="180" fill="none" stroke="#7fd4dc" stroke-width="2" stroke-dasharray="40 26" opacity="0.7"/>
+  <ellipse cx="600" cy="330" rx="252" ry="60" fill="none" stroke="#c1362f" stroke-width="3"/>
+  <rect x="72" y="72" width="26" height="26" fill="#e8edf1"/>
+  <rect x="72" y="83" width="26" height="5" fill="#05070b"/>
+  <text x="112" y="94" font-family="Arial, sans-serif" font-weight="800" font-size="34" letter-spacing="6" fill="#e8edf1">BLACKOUT</text>
+  <text x="72" y="540" font-family=" monospace" font-size="30" letter-spacing="4" fill="#e8edf1">BREAK THE INTERNET. WATCH WHAT SURVIVES.</text>
+  <text x="72" y="576" font-family="monospace" font-size="20" letter-spacing="2" fill="#5d6a76">SIMPLIFIED EDUCATIONAL SIMULATION — NOT A LIVE OUTAGE MAP</text>
+</svg>

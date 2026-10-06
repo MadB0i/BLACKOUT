@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.browsers/
+test-results/
+playwright-report/
+screenshots/*.png
+!screenshots/.gitkeep
+*.local
+.DS_Store
+coverage/
