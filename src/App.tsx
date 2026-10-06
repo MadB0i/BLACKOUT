@@ -80,7 +80,7 @@ export default function App() {
         <FirstRun />
         <p className="bo-model-note" role="note">
           SIMPLIFIED EDUCATIONAL MODEL — NOT LIVE DATA · SEED <span className="bo-mono">{seed}</span> · Q:
-          {quality.toUpperCase()} · KEYS <span className="bo-mono">SPACE ⏯ ←/→ ±2s R reset ESC clear</span>
+          {quality.toUpperCase()} <span className="bo-keys">· KEYS <span className="bo-mono">SPACE ⏯ ←/→ ±2s R reset ESC clear</span></span>
         </p>
         {notice && (
           <p className="bo-notice" role="status">

@@ -86,7 +86,35 @@ export function Network(props: Props) {
       <Arcs {...props} />
       <Pulses {...props} />
       <NodeMarkers {...props} />
+      <Scars snapshot={props.snapshot} layers={props.layers} />
       <ShockFieldLive failures={props.failures} reducedMotion={props.reducedMotion} />
+    </group>
+  );
+}
+
+/**
+ * Persistent wound markers: a dark-red break diamond at the midpoint of every
+ * failed visible route. Static state (not motion) — survives the shock ring
+ * so a still frame still identifies the wound.
+ */
+const scarGeom = new THREE.OctahedronGeometry(0.011);
+
+function Scars({ snapshot, layers }: { snapshot: Snapshot; layers: Layers }) {
+  const failed = useMemo(
+    () =>
+      EDGES.filter((e) => layerOf(e.kind, layers) && snapshot.edges[e.id]?.status === 'failed'),
+    [snapshot, layers],
+  );
+  return (
+    <group>
+      {failed.map((e) => {
+        const mid = edgeGeom(e.id).mid.clone().setLength(GLOBE_R * 1.012);
+        return (
+          <mesh key={e.id} geometry={scarGeom} position={mid}>
+            <meshBasicMaterial color="#8f1f18" toneMapped={false} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
@@ -152,7 +180,8 @@ function ArcLine({
   const st = arcStyle(edgeId, snapshot, hovered, selected);
   const failed = snapshot.edges[edgeId]?.status === 'failed';
   line.material.color.copy(st.color);
-  line.material.opacity = failed ? st.opacity * 0.55 : st.opacity;
+  // Failed routes stay visibly wounded (scar), not ghosted.
+  line.material.opacity = failed ? Math.max(st.opacity, 0.68) : st.opacity;
 
   return (
     <primitive
@@ -395,14 +424,15 @@ function ShockRing({ failure, age, reducedMotion }: { failure: Failure; age: num
 
   useFrame(() => {
     const k = Math.min(1, Math.max(0, age / 2.4));
-    const s = reducedMotion ? 2.2 : 1 + k * 3.4;
+    // Reduced motion: a modest static ring — state, not spectacle.
+    const s = reducedMotion ? 1.2 : 1 + k * 4.6;
     ref.current.scale.setScalar(s);
-    mat.current.opacity = reducedMotion ? 0.4 : 0.9 * (1 - k);
+    mat.current.opacity = reducedMotion ? 0.5 : 0.95 * (1 - k);
   });
 
   return (
     <mesh ref={ref} position={center} quaternion={quat}>
-      <ringGeometry args={[0.03, 0.034, 48]} />
+      <ringGeometry args={[0.046, 0.053, 48]} />
       <meshBasicMaterial
         ref={mat}
         color="#e0574a"

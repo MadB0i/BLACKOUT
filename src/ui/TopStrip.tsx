@@ -31,7 +31,11 @@ export function TopStrip() {
 
       <div className="bo-sysstat" aria-live="polite">
         <span className="bo-kicker">SIM T+{fmtTime(simT)}</span>
-        <span className={`bo-state bo-state-${state.toLowerCase()}`} data-testid="system-state">
+        <span
+          key={state}
+          className={`bo-state bo-state-hit bo-state-${state.toLowerCase()}`}
+          data-testid="system-state"
+        >
           {state}
         </span>
         {scenarioId && <span className="bo-scenario-tag">{scenarioId.toUpperCase()}</span>}

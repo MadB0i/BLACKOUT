@@ -1,6 +1,7 @@
 // Timeline + replay transport. Visual state derives from simT, so scrubbing,
 // stepping and replay are exact by construction.
 
+import { useEffect, useRef } from 'react';
 import { useBlackout } from '../state/store';
 import { fmtTime } from './format';
 
@@ -10,9 +11,12 @@ export function Timeline() {
   const playing = useBlackout((s) => s.playing);
   const speed = useBlackout((s) => s.speed);
   const events = useBlackout((s) => s.snapshot.events);
+  const reducedMotion = useBlackout((s) => s.reducedMotion);
   const setSimT = useBlackout((s) => s.setSimT);
   const setPlaying = useBlackout((s) => s.setPlaying);
   const setSpeed = useBlackout((s) => s.setSpeed);
+  const stripRef = useRef<HTMLOListElement>(null);
+  const seenCount = useRef(0);
 
   const step = (d: number) => {
     setPlaying(false);
@@ -22,6 +26,20 @@ export function Timeline() {
     setSimT(0);
     setPlaying(true);
   };
+
+  // Follow the newest event — but never yank the strip while the user reads history.
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el || reducedMotion) {
+      seenCount.current = events.length;
+      return;
+    }
+    if (events.length > seenCount.current) {
+      const nearEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 48;
+      if (nearEnd) el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' });
+    }
+    seenCount.current = events.length;
+  }, [events, events.length, reducedMotion]);
 
   return (
     <footer className="bo-timeline" aria-label="Event timeline and replay transport">
@@ -54,13 +72,13 @@ export function Timeline() {
         onChange={(e) => setSimT(Number(e.target.value))}
         aria-label="Scrub simulation time"
       />
-      <ol className="bo-events" aria-label="Simulation event log" aria-live="polite">
+      <ol ref={stripRef} className="bo-events" aria-label="Simulation event log" aria-live="polite">
         {events.length === 0 && <li className="bo-event bo-info">Mesh nominal. Break something.</li>}
         {events.map((e, i) => (
           <li key={`${e.t}-${e.type}-${i}`}>
             <button
               type="button"
-              className={`bo-event bo-${e.severity}`}
+              className={`bo-event bo-${e.severity}${i === events.length - 1 ? ' bo-event-latest' : ''}`}
               onClick={() => {
                 setPlaying(false);
                 setSimT(e.t);
@@ -68,8 +86,10 @@ export function Timeline() {
               title={`Jump to T+${fmtTime(e.t)}`}
             >
               <span className="bo-mono">{fmtTime(e.t)}</span>
-              <strong>{e.type}</strong>
-              <span>{e.message}</span>
+              <span className="bo-event-body">
+                <strong>{e.type}</strong>
+                <span>{e.message}</span>
+              </span>
             </button>
           </li>
         ))}

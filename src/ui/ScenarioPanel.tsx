@@ -94,6 +94,9 @@ export function ScenarioPanel() {
           onChange={(e) => setFilter(e.target.value)}
         />
         <ul>
+          {routes.length === 0 && (
+            <li className="bo-route-empty">No routes match this filter.</li>
+          )}
           {routes.map((e) => {
             const rt = snapshot.edges[e.id];
             const st = rt?.status ?? 'healthy';

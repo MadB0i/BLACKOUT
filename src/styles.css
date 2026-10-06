@@ -206,10 +206,16 @@ input[type='search'], input[type='text'], input:not([type]), select {
   color: var(--ink-3);
 }
 .bo-state { font-family: var(--font-mono); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; }
-.bo-state-nominal { color: var(--cyan); }
-.bo-state-strained { color: var(--teal); }
-.bo-state-degraded { color: var(--amber); }
-.bo-state-critical { color: var(--red); }
+.bo-state-nominal { color: var(--cyan); --hit: rgba(127, 212, 220, 0.28); }
+.bo-state-strained { color: var(--teal); --hit: rgba(63, 214, 178, 0.28); }
+.bo-state-degraded { color: var(--amber); --hit: rgba(232, 163, 61, 0.3); }
+.bo-state-critical { color: var(--red); --hit: rgba(224, 87, 74, 0.32); }
+/* ONE restrained hit per state change: remount (key) replays it once. */
+.bo-state-hit { animation: bo-hit 650ms var(--ease) 1; padding: 1px 6px; }
+@keyframes bo-hit {
+  0% { background-color: var(--hit); }
+  100% { background-color: transparent; }
+}
 .bo-scenario-tag {
   font-family: var(--font-mono);
   font-size: 0.625rem;
@@ -278,6 +284,17 @@ input[type='search'], input[type='text'], input:not([type]), select {
 .bo-route-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.6875rem; }
 .bo-route-util { color: var(--ink-3); font-size: 0.6875rem; }
 .bo-route.is-active { border-color: var(--cyan); }
+.bo-route-empty {
+  font-size: var(--step--1);
+  color: var(--ink-3);
+  padding: var(--space-xs) var(--space-2xs);
+  list-style: none;
+}
+
+/* keyboard hints are dead weight on touch devices */
+@media (pointer: coarse) {
+  .bo-keys { display: none; }
+}
 
 /* ---------- center ---------- */
 .bo-center { grid-area: center; position: relative; min-width: 0; min-height: 0; background: #05070b; }
@@ -415,23 +432,44 @@ input[type='search'], input[type='text'], input:not([type]), select {
 .bo-events > li { flex: none; }
 .bo-event {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2xs);
-  max-width: 420px;
-  border-left-width: 2px;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  max-width: 460px;
+  border-left-width: 3px;
   text-align: left;
   font-family: var(--font-text);
+  padding: var(--space-2xs) var(--space-xs);
 }
-.bo-event .bo-mono { color: var(--ink-3); }
+.bo-event .bo-mono { color: var(--ink-3); padding-top: 1px; }
+.bo-event-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .bo-event strong { font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.1em; }
-.bo-event span:last-child { font-size: var(--step--1); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; min-width: 0; }
+.bo-event-body > span {
+  font-size: var(--step--1);
+  color: var(--ink-2);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 0;
+}
 .bo-event.bo-info { border-left-color: var(--line-hi); }
-.bo-event.bo-warn { border-left-color: var(--amber); }
-.bo-event.bo-critical { border-left-color: var(--red); }
-.bo-event.bo-good { border-left-color: var(--teal); }
+.bo-event.bo-warn { border-left-color: var(--amber); background: rgba(232, 163, 61, 0.06); }
+.bo-event.bo-critical { border-left-color: var(--red); background: rgba(193, 54, 47, 0.09); }
+.bo-event.bo-critical strong { color: var(--red); }
+.bo-event.bo-warn strong { color: var(--amber); }
+.bo-event.bo-good { border-left-color: var(--teal); background: rgba(63, 214, 178, 0.05); }
+.bo-event.bo-good strong { color: var(--teal); }
+/* newest event lands once — the timeline beat of the cascade rhythm */
+.bo-event-latest { animation: bo-in 480ms var(--ease) 1; }
+@keyframes bo-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
 
 /* ---------- reduced motion ---------- */
 .bo-reduced .bo-firstrun button { animation: none; }
+.bo-reduced .bo-state-hit, .bo-reduced .bo-event-latest { animation: none; }
 .bo-reduced * { scroll-behavior: auto !important; }
 @media (prefers-reduced-motion: reduce) {
   .bo-firstrun button { animation: none; }
@@ -458,4 +496,33 @@ input[type='search'], input[type='text'], input:not([type]), select {
   .bo-top-actions button, .bo-transport button { min-height: 44px; }
   .bo-events { max-height: 160px; }
   .bo-share { position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: auto; border-top: var(--border); overscroll-behavior: contain; }
+}
+
+/* ---------- compact header grid for narrow phones (no clipped controls) ---------- */
+@media (max-width: 600px) {
+  .bo-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'brand conn'
+      'sys sys'
+      'actions actions';
+    row-gap: var(--space-3xs);
+    align-items: center;
+  }
+  .bo-brand { grid-area: brand; min-width: 0; }
+  .bo-conn { grid-area: conn; justify-self: end; }
+  .bo-conn strong { font-size: var(--step-1); }
+  .bo-sysstat { grid-area: sys; margin: 0; justify-content: flex-start; }
+  .bo-top-right { grid-area: actions; display: contents; }
+  .bo-top-actions {
+    grid-area: actions;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3xs);
+  }
+  .bo-top-actions button { min-height: 44px; padding-inline: 0; }
+  /* keyboard hints are dead weight on narrow touch layouts regardless of
+     reported pointer type */
+  .bo-keys { display: none; }
 }
