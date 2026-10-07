@@ -34,11 +34,17 @@ test('perf probe', async ({ page }) => {
       samples.sort((a, b) => a - b);
       const avg = samples.reduce((s, v) => s + v, 0) / Math.max(1, samples.length);
       const p95 = samples[Math.floor(samples.length * 0.95)] ?? 0;
-      return `${l}: frames=${samples.length} avgFPS=${(1000 / avg).toFixed(1)} p95frame=${p95.toFixed(1)}ms longtasks=${longTasks}`;
+      // Stall guard uses the MEDIAN frame: a genuinely stalled loop has every
+      // frame long, while a host hiccup (busy CI box, SwiftShader contention)
+      // only stretches a few. Averaging over the mean lets unrelated machine
+      // load fail an otherwise healthy render loop.
+      const med = samples[Math.floor(samples.length / 2)] ?? 0;
+      return `${l}: frames=${samples.length} avgFPS=${(1000 / avg).toFixed(1)} medianFPS=${(1000 / med).toFixed(1)} p95frame=${p95.toFixed(1)}ms longtasks=${longTasks}`;
     }, label);
   const nominal = (await measure('nominal')) as string;
   console.log('PERF', nominal);
   await page.getByRole('button', { name: /CHAOS MODE/ }).click();
+  await page.getByTestId('play-pause').click();
   await page.waitForTimeout(2000);
   const chaos = (await measure('chaos-playing')) as string;
   console.log('PERF', chaos);
@@ -47,7 +53,7 @@ test('perf probe', async ({ page }) => {
   // measures 6–30fps); real GPUs run this scene at 60fps, and the in-app
   // adaptive tier (see QualityProbe) sheds bloom/stars below ~38fps.
   for (const line of [nominal, chaos]) {
-    const fps = Number(/avgFPS=([\d.]+)/.exec(line)?.[1] ?? '0');
-    test.expect(fps).toBeGreaterThan(1.5);
+    const fps = Number(/medianFPS=([\d.]+)/.exec(line)?.[1] ?? '0');
+    test.expect(fps, `stalled frame loop: ${line}`).toBeGreaterThan(1.5);
   }
 });

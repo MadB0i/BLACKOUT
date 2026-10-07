@@ -7,7 +7,9 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import { EarthGlobe } from './Earth';
 import { Network } from './Network';
+import { OrbitLayer } from './OrbitLayer';
 import { latLonToVec3 } from './geo';
+import { scenarioTargets } from '../data/scenarios';
 import { useBlackout } from '../state/store';
 
 const Fx = lazy(() => import('./Fx').then((m) => ({ default: m.Fx })));
@@ -23,15 +25,28 @@ function webglAvailable(): boolean {  try {
 export function GlobeView() {
   const ok = useMemo(() => (typeof window === 'undefined' ? true : webglAvailable()), []);
   const snapshot = useBlackout((s) => s.snapshot);
+  const orbit = useBlackout((s) => s.orbit);
   const failures = useBlackout((s) => s.failures);
   const layers = useBlackout((s) => s.layers);
+  const view = useBlackout((s) => s.view);
   const selection = useBlackout((s) => s.selection);
+  const hoverScenarioId = useBlackout((s) => s.hoverScenarioId);
+  const scenarioId = useBlackout((s) => s.scenarioId);
+  const projected = useBlackout((s) => s.armed !== null);
   const reducedMotion = useBlackout((s) => s.reducedMotion);
   const quality = useBlackout((s) => s.quality);
   const focus = useBlackout((s) => s.focus);
   const select = useBlackout((s) => s.select);
   const [hoverEdge, setHoverEdge] = useState<string | null>(null);
   const [tier, setTier] = useState<'high' | 'low'>(quality === 'low' ? 'low' : 'high');
+
+  // Hover previews the scenario's routes; the armed scenario keeps its rail
+  // visible until the first failure lands. Never touches the simulation.
+  const previewKey = (hoverScenarioId !== scenarioId ? hoverScenarioId : null) ?? (projected ? scenarioId : null);
+  const previewTargets = useMemo(() => {
+    if (!previewKey) return null;
+    return scenarioTargets(previewKey);
+  }, [previewKey]);
 
   useEffect(() => {
     if (quality !== 'auto') setTier(quality);
@@ -52,7 +67,10 @@ export function GlobeView() {
 
   const low = tier === 'low';
   return (
-    <div id="bo-gl" className="bo-gl" aria-label="Interactive 3D globe of simulated Internet infrastructure">
+    <div id="bo-gl" className="bo-gl" data-state={projected ? 'projected' : 'live'} aria-label="Interactive 3D globe of simulated Internet infrastructure">
+      {(projected || previewKey) && (
+        <span className="bo-scene-mode">◇ {projected ? 'PROJECTED · NOT EXECUTED' : 'SCENARIO HOVER PREVIEW'}</span>
+      )}
       <Canvas
         dpr={low ? 1 : Math.min(window.devicePixelRatio || 1, 2)}
         camera={{ position: [0.4, 0.9, 2.9], fov: 42, near: 0.1, far: 60 }}
@@ -66,7 +84,7 @@ export function GlobeView() {
         <Suspense fallback={null}>
           <CameraRig focus={focus} reducedMotion={reducedMotion} />
           <ambientLight intensity={0.4} />
-          <EarthGlobe reducedMotion={reducedMotion} />
+          <EarthGlobe reducedMotion={reducedMotion} highQuality={!low} />
           <Network
             snapshot={snapshot}
             failures={failures}
@@ -76,7 +94,12 @@ export function GlobeView() {
             onSelect={select}
             hoverEdge={hoverEdge}
             onHoverEdge={setHoverEdge}
+            previewEdges={previewTargets?.edges ?? null}
+            previewNodes={previewTargets?.nodes ?? null}
+            projected={projected}
+            dimmed={view === 'orbit'}
           />
+          <OrbitLayer orbit={orbit} reducedMotion={reducedMotion} view={view} projected={projected} />
           {!low && !reducedMotion && (
             <Stars radius={40} depth={12} count={1400} factor={2.2} saturation={0} fade speed={0.4} />
           )}

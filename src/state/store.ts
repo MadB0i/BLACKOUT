@@ -4,20 +4,30 @@
 
 import { create } from 'zustand';
 import { buildChaosPlan } from '../data/chaos';
-import { getScenario } from '../data/scenarios';
+import { getScenario, scenarioSteps } from '../data/scenarios';
 import { EDGES, NODES } from '../data/topology';
-import { horizonOf, snapshotAt } from '../core/simulation';
-import type { Failure, Snapshot } from '../core/types';
+import { horizonOf, runSimulation, snapshotAt } from '../core/simulation';
+import { orbitState } from '../core/orbitSim';
+import type { Failure, OrbitState, Snapshot } from '../core/types';
 import { decodeShare } from '../core/serialize';
 
 export type Selection = { kind: 'edge' | 'node'; id: string } | null;
 export type Quality = 'auto' | 'high' | 'low';
+/** Which dependency domains the globe draws. */
+export type View = 'network' | 'orbit' | 'hybrid';
 
 export interface Layers {
   submarine: boolean;
   terrestrial: boolean;
   cloud: boolean;
   dns: boolean;
+}
+
+/** Snapshot shown while a scenario is armed but not yet playing. */
+export interface ArmedPreview {
+  scenarioId: string;
+  metrics: Snapshot['metrics'];
+  orbit: OrbitState;
 }
 
 interface BlackoutState {
@@ -29,15 +39,22 @@ interface BlackoutState {
   speed: number;
   selection: Selection;
   layers: Layers;
+  view: View;
   quality: Quality;
   reducedMotion: boolean;
   hintDismissed: boolean;
   focus: { lon: number; lat: number; nonce: number } | null;
   notice: string | null;
   snapshot: Snapshot;
+  orbit: OrbitState;
+  /** end-state metrics for the armed scenario (null when nothing is armed) */
+  armed: ArmedPreview | null;
+  /** scenario currently hovered in the library — preview only, never applied */
+  hoverScenarioId: string | null;
   horizon: number;
 
   loadScenario: (id: string) => void;
+  hoverScenario: (id: string | null) => void;
   takeOffline: (kind: 'edge' | 'node', id: string) => void;
   recover: (kind: 'edge' | 'node', id: string) => void;
   surge: (edgeId: string, amount: number) => void;
@@ -48,6 +65,7 @@ interface BlackoutState {
   setSpeed: (s: number) => void;
   select: (s: Selection) => void;
   toggleLayer: (k: keyof Layers) => void;
+  setView: (v: View) => void;
   setQuality: (q: Quality) => void;
   setReducedMotion: (v: boolean) => void;
   dismissHint: () => void;
@@ -56,28 +74,44 @@ interface BlackoutState {
   applyShare: (s: string) => boolean;
 }
 
-let cache: { failures: Failure[]; t: number; snapshot: Snapshot | null; horizon: number } = {
-  failures: [],
-  t: -1,
-  snapshot: null,
-  horizon: 0,
-};
+let cache: {
+  failures: Failure[];
+  t: number;
+  snapshot: Snapshot | null;
+  orbit: OrbitState | null;
+  horizon: number;
+} = { failures: [], t: -1, snapshot: null, orbit: null, horizon: 0 };
 
-function recompute(failures: Failure[], simT: number): { snapshot: Snapshot; horizon: number } {
+function recompute(
+  failures: Failure[],
+  simT: number,
+): { snapshot: Snapshot; orbit: OrbitState; horizon: number } {
   const t = Math.floor(simT);
   // Snapshot identity is the scene's render trigger: reuse it while neither
   // the failure set nor the integer second changed, so playback re-renders
   // the scene at 1Hz instead of 10Hz. Scrub/step/recover stay exact.
   if (cache.snapshot && cache.failures === failures && cache.t === t) {
-    return { snapshot: cache.snapshot, horizon: cache.horizon };
+    return { snapshot: cache.snapshot, orbit: cache.orbit!, horizon: cache.horizon };
   }
   const snapshot = snapshotAt(NODES, EDGES, failures, t);
+  const orbit = orbitState(EDGES, snapshot);
   const horizon = horizonOf(failures);
-  cache = { failures, t, snapshot, horizon };
-  return { snapshot, horizon };
+  cache = { failures, t, snapshot, orbit, horizon };
+  return { snapshot, orbit, horizon };
 }
 
-function withSim(s: { failures: Failure[]; simT: number }): Pick<BlackoutState, 'snapshot' | 'horizon'> {
+/** End-state preview for a scenario: every step applied, simulation not started. */
+function armedPreview(id: string): ArmedPreview | null {
+  if (!getScenario(id)) return null;
+  const steps = scenarioSteps(id);
+  const snapshot = runSimulation(NODES, EDGES, steps);
+  return { scenarioId: id, metrics: snapshot.metrics, orbit: orbitState(EDGES, snapshot) };
+}
+
+function withSim(s: { failures: Failure[]; simT: number }): Pick<
+  BlackoutState,
+  'snapshot' | 'orbit' | 'horizon'
+> {
   return recompute(s.failures, s.simT);
 }
 
@@ -92,6 +126,7 @@ export const useBlackout = create<BlackoutState>()((set, get) => {
     speed: 1,
     selection: null,
     layers: { submarine: true, terrestrial: true, cloud: true, dns: true },
+    view: 'network',
     quality: 'auto',
     reducedMotion:
       typeof window !== 'undefined' &&
@@ -101,30 +136,40 @@ export const useBlackout = create<BlackoutState>()((set, get) => {
     focus: null,
     notice: null,
     snapshot: init.snapshot,
+    orbit: init.orbit,
+    armed: null,
+    hoverScenarioId: null,
     horizon: init.horizon,
 
+    // Arming a scenario loads its deterministic step list and parks the clock at
+    // T+00:00. Nothing fails until the operator presses PLAY — the library, the
+    // globe preview and the console all read the armed end-state meanwhile.
     loadScenario: (id) => {
       const sc = getScenario(id);
       if (!sc) return;
-      const steps = id === 'chaos' ? buildChaosPlan('blackout-chaos-prime').steps : sc.steps;
+      const steps = scenarioSteps(id);
       const simT = 0;
       set({
         scenarioId: id,
         seed: sc.seed,
         failures: steps.map((f) => ({ ...f })),
         simT,
-        playing: true,
+        playing: false,
         selection: null,
+        armed: armedPreview(id),
         ...withSim({ failures: steps, simT }),
       });
     },
+
+    hoverScenario: (id) => set({ hoverScenarioId: id }),
 
     takeOffline: (kind, id) => {
       const { failures, simT } = get();
       const at = Math.floor(simT);
       const cause = kind === 'edge' ? 'manual takedown by operator' : 'manual takedown by operator';
       const next = [...failures, { kind, id, at, cause } as Failure];
-      set({ failures: next, playing: true, ...withSim({ failures: next, simT }) });
+      // Manual deviation leaves the authored script: preview mode ends.
+      set({ failures: next, playing: true, armed: null, ...withSim({ failures: next, simT }) });
     },
 
     recover: (kind, id) => {
@@ -132,26 +177,32 @@ export const useBlackout = create<BlackoutState>()((set, get) => {
       const at = Math.floor(simT);
       const rk = kind === 'edge' ? 'recover-edge' : 'recover-node';
       const next = [...failures, { kind: rk, id, at, cause: 'manual recovery by operator' } as Failure];
-      set({ failures: next, playing: true, ...withSim({ failures: next, simT }) });
+      set({ failures: next, playing: true, armed: null, ...withSim({ failures: next, simT }) });
     },
 
     surge: (edgeId, amount) => {
       const { failures, simT } = get();
       const at = Math.floor(simT);
       const next = [...failures, { kind: 'surge', id: edgeId, at, amount, cause: 'manual surge injection' } as Failure];
-      set({ failures: next, playing: true, ...withSim({ failures: next, simT }) });
+      set({ failures: next, playing: true, armed: null, ...withSim({ failures: next, simT }) });
     },
 
     startChaos: (seed) => {
       const s = (seed ?? `blackout-chaos-${Math.floor(Date.now() / 1000)}`).slice(0, 40);
       const plan = buildChaosPlan(s);
+      const endState = runSimulation(NODES, EDGES, plan.steps);
       set({
         scenarioId: 'chaos',
         seed: s,
         failures: plan.steps,
         simT: 0,
-        playing: true,
+        playing: false,
         selection: null,
+        armed: {
+          scenarioId: 'chaos',
+          metrics: endState.metrics,
+          orbit: orbitState(EDGES, endState),
+        },
         ...withSim({ failures: plan.steps, simT: 0 }),
       });
     },
@@ -163,19 +214,28 @@ export const useBlackout = create<BlackoutState>()((set, get) => {
         simT: 0,
         playing: false,
         selection: null,
+        armed: null,
+        hoverScenarioId: null,
         ...withSim({ failures: [], simT: 0 }),
       }),
 
     setSimT: (t) => {
-      const { failures, horizon } = get();
+      const { failures, horizon, armed } = get();
       const clamped = Math.max(0, Math.min(horizon, t));
-      set({ simT: clamped, ...withSim({ failures, simT: clamped }) });
+      // Moving the clock ends preview mode: from here the console shows live state.
+      set({
+        simT: clamped,
+        armed: clamped > 0 ? null : armed,
+        ...withSim({ failures, simT: clamped }),
+      });
     },
 
-    setPlaying: (playing) => set({ playing }),
+    // PLAY starts execution and therefore ends preview mode.
+    setPlaying: (playing) => set((s) => (playing && s.armed ? { playing, armed: null } : { playing })),
     setSpeed: (speed) => set({ speed }),
     select: (selection) => set({ selection }),
     toggleLayer: (k) => set((s) => ({ layers: { ...s.layers, [k]: !s.layers[k] } })),
+    setView: (view) => set({ view }),
     setQuality: (quality) => set({ quality }),
     setReducedMotion: (reducedMotion) => set({ reducedMotion }),
     dismissHint: () => set({ hintDismissed: true }),
@@ -192,6 +252,7 @@ export const useBlackout = create<BlackoutState>()((set, get) => {
         simT: decoded.t,
         playing: false,
         selection: null,
+        armed: decoded.scenario ? armedPreview(decoded.scenario) : null,
         ...withSim({ failures: decoded.fails, simT: decoded.t }),
       });
       return true;

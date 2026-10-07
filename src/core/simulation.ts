@@ -9,6 +9,8 @@ import { alternatePaths, reachableComponent } from './graph';
 import type {
   Failure,
   Metrics,
+  RegionCode,
+  RegionImpact,
   Severity,
   SimEdge,
   SimEvent,
@@ -277,6 +279,47 @@ export function runSimulation(
     ),
   );
 
+  // Per-region impact: an edge belongs to every region it touches, so a
+  // transatlantic cut counts against both sides of the ocean (a cable is
+  // shared risk, not a one-sided event). Affected load = demand dropped for
+  // lack of path + load absorbed by alternates. Only genuinely affected
+  // regions survive the 2% floor applied by the UI.
+  const unservedByEdge = new Map<string, number>();
+  for (const u of unserved) {
+    unservedByEdge.set(u.edgeId, (unservedByEdge.get(u.edgeId) ?? 0) + u.amount);
+  }
+  const regionOf = (edgeId: string): RegionCode | null => {
+    const e = edgeById.get(edgeId);
+    if (!e) return null;
+    const a = nodeById.get(e.from);
+    const b = nodeById.get(e.to);
+    if (!a || !b) return null;
+    // Count an edge against exactly one region to keep the shares honest:
+    // the region that carries more of the edge's demand (ties → lower code).
+    return b.demand > a.demand ? b.region : a.region;
+  };
+  const regionAgg = new Map<RegionCode, { demand: number; affected: number }>();
+  for (const e of edges) {
+    const r = regionOf(e.id);
+    if (!r) continue;
+    const cur = regionAgg.get(r) ?? { demand: 0, affected: 0 };
+    cur.demand += e.demand;
+    cur.affected += Math.min(e.demand, (unservedByEdge.get(e.id) ?? 0) + (diverted.get(e.id) ?? 0));
+    regionAgg.set(r, cur);
+  }
+  const regionImpact: RegionImpact[] = [...regionAgg.entries()]
+    .map(([region, a]) => ({
+      region,
+      demand: a.demand,
+      unserved: Math.round(
+        [...unservedByEdge.entries()]
+          .filter(([id]) => regionOf(id) === region)
+          .reduce((s, [, v]) => s + v, 0),
+      ),
+      impact: a.demand > 0 ? Math.max(0, Math.min(1, a.affected / a.demand)) : 0,
+    }))
+    .sort((x, y) => y.impact - x.impact || (x.region < y.region ? -1 : 1));
+
   const metrics: Metrics = {
     connectivity,
     reroutedShare: totalDemand > 0 ? reroutedTotal / totalDemand : 0,
@@ -290,6 +333,7 @@ export function runSimulation(
     resilience,
     totalDemand,
     servedDemand,
+    regionImpact,
   };
 
   events.sort((a, b) => a.t - b.t || (a.type < b.type ? -1 : 1));

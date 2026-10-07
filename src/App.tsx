@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { GlobeView } from './scene/Globe';
 import { advanceClock, useBlackout } from './state/store';
-import { BlastRadius } from './ui/BlastRadius';
 import { FirstRun } from './ui/FirstRun';
+import { ImpactConsole } from './ui/ImpactConsole';
 import { Inspector } from './ui/Inspector';
 import { ScenarioPanel } from './ui/ScenarioPanel';
 import { Timeline } from './ui/Timeline';
@@ -13,6 +13,8 @@ export default function App() {
   const seed = useBlackout((s) => s.seed);
   const quality = useBlackout((s) => s.quality);
   const notice = useBlackout((s) => s.notice);
+  const view = useBlackout((s) => s.view);
+  const projected = useBlackout((s) => s.armed !== null);
 
   // Deep-link: ?s=<share token> recreates the scenario.
   useEffect(() => {
@@ -69,7 +71,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className={`bo-app${reducedMotion ? ' bo-reduced' : ''}`}>
+    <div className={`bo-app${reducedMotion ? ' bo-reduced' : ''}${projected ? ' bo-projected' : ''}`}>
       <a href="#bo-main" className="bo-skip">
         Skip to globe
       </a>
@@ -81,6 +83,12 @@ export default function App() {
         <p className="bo-model-note" role="note">
           SIMPLIFIED EDUCATIONAL MODEL — NOT LIVE DATA · SEED <span className="bo-mono">{seed}</span> · Q:
           {quality.toUpperCase()} <span className="bo-keys">· KEYS <span className="bo-mono">SPACE ⏯ ←/→ ±2s R reset ESC clear</span></span>
+          {view !== 'network' && (
+            <>
+              {' '}
+              · <span className="bo-model-orbit">ORBIT LAYER SYNTHETIC — SPACE SYSTEMS KEEP OPERATING</span>
+            </>
+          )}
         </p>
         {notice && (
           <p className="bo-notice" role="status">
@@ -89,8 +97,8 @@ export default function App() {
         )}
       </main>
       <div className="bo-right">
+        <ImpactConsole />
         <Inspector />
-        <BlastRadius />
       </div>
       <Timeline />
     </div>

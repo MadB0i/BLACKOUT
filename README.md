@@ -1,113 +1,198 @@
 # BLACKOUT
 
-Break the internet. Watch what survives.
+**Break the Internet. Watch What Survives.**
 
-[▶ TRY BLACKOUT LIVE](https://madb0i.github.io/BLACKOUT/)
+A deterministic visual simulator for exploring how network failures, rerouting,
+cascading infrastructure dependencies, and ground-to-orbit connectivity effects
+propagate across a simplified planetary system.
 
-[![deploy](https://github.com/MadB0i/BLACKOUT/actions/workflows/pages.yml/badge.svg)](https://github.com/MadB0i/BLACKOUT/actions/workflows/pages.yml)
-[![license](https://img.shields.io/github/license/MadB0i/BLACKOUT)](LICENSE)
+[Live Demo](https://madb0i.github.io/BLACKOUT/) · [How It Works](#how-it-works) ·
+[Data & Model](docs/DATA_SOURCES.md) · [License](LICENSE)
 
-![A transatlantic route down: survivors strained, traffic rerouted, blast radius live](docs/hero-failed.png)
+[![Pages deployment](https://github.com/MadB0i/BLACKOUT/actions/workflows/pages.yml/badge.svg)](https://github.com/MadB0i/BLACKOUT/actions/workflows/pages.yml)
 
-> **Educational simulation.** BLACKOUT models a simplified global network and shows
-> how failures propagate through it. It is not a live internet map, outage feed,
-> or predictor — every capacity, demand and corridor behavior is synthetic and
-> labelled as such. See [DATA_SOURCES](docs/DATA_SOURCES.md).
+![BLACKOUT: nominal NETWORK, armed HYBRID preview, then a confirmed cascade across the network and ground-dependent orbital services](docs/media/blackout-demo.gif)
 
-## What is BLACKOUT?
+*Seeded CHAOS MODE (`blackout-demo-25`), from nominal to projected to confirmed
+failure. Accelerated playback, ending on a held final frame.*
+[MP4 version](docs/media/blackout-demo.mp4)
 
-An interactive 3D simulation of internet-infrastructure failure. A dark globe
-carries a simplified network model — submarine corridors, exchanges, cloud
-regions, DNS infrastructure. You disable routes and nodes, then watch traffic
-reroute, links overload, cascades trip, and regions degrade.
+## What BLACKOUT is
 
-You can break routes and hubs, inspect dependencies and alternate paths, run
-ten authored scenarios plus a seeded chaos mode, scrub and replay every event
-on a timeline, and share any failure state as a deterministic link.
+Network resilience is hard to feel from a status page. BLACKOUT makes the
+dependencies visible: what broke, where the load went, and what failed next.
+The globe connects submarine corridors, terrestrial hubs, cloud regions, DNS
+infrastructure, and a synthetic orbital layer in one inspectable model.
 
-## Why it exists
+This is an educational simulation. It uses no live traffic, outage feed, or
+operational satellite data.
 
-Network resilience is hard to feel from a status page. BLACKOUT makes cascading
-failure visible: what broke, where the load went, and what snapped next.
+## Capabilities
 
-## See it in action
+- Fail routes or hubs; inspect load, capacity, alternate paths, and dependencies.
+- Explore rerouting, overload trips, unserved demand, resilience, and regional impact.
+- Arm a scenario before execution: amber, ghosted/dashed **PROJECTED** treatment
+  becomes solid **LIVE** reporting when playback starts.
+- Switch between **NETWORK**, **ORBIT**, and **HYBRID**; read **MESH / ORBIT /
+  CONTROL** independently in the top strip.
+- Trace ground-station backhaul into telemetry, command, timing, and dissemination
+  effects while spacecraft retain autonomous operation.
+- Pause, step, scrub, replay, or reset a deterministic run; share its state by URL.
+- Use the responsive interface with keyboard controls or reduced motion.
 
-![Chaos mode: seven routes failed, regions affected, timeline full](docs/hero-chaos.png)
+## Screenshots
 
-## Core interactions
+**NETWORK — terrestrial routes under nominal conditions.**
+The globe is surrounded by scenario controls, Impact Intelligence, and the timeline.
 
-- **Break routes** — take submarine/terrestrial/cloud/DNS segments offline
-- **Break hubs** — drop exchanges, cloud regions, DNS instances entirely
-- **Inspect** — capacity, load, alternates, dependencies per route and node
-- **Observe rerouting** — diverted load, strain, overload, cascade trips
-- **Run scenarios** — single/dual cable cuts, gateway loss, DNS disruption, BGP route leak, isolation, recovery
-- **Chaos mode** — seeded escalating failures; copy the seed to replay them
-- **Replay timeline** — play, pause, step, scrub, speed, jump to any event
-- **Share** — deterministic URL, PNG snapshot, short WebM clip
+[![NETWORK nominal: clean terrestrial globe and SYSTEM NOMINAL console](docs/media/blackout-network.png)](docs/media/blackout-network.png)
 
-## Visual model
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/media/blackout-hybrid-preview.png"><img src="docs/media/blackout-hybrid-preview.png" alt="HYBRID with CHAOS MODE armed: amber projected domains, orbital layer, and SCENARIO PREVIEW console"></a>
+      <strong>HYBRID · PROJECTED</strong><br>
+      An armed scenario shows its expected cost before anything executes.
+    </td>
+    <td width="50%">
+      <a href="docs/media/blackout-hybrid-failure.png"><img src="docs/media/blackout-hybrid-failure.png" alt="HYBRID cascade: confirmed failures, degraded MESH, ORBIT and CONTROL, regional impact and orbital dependency chain"></a>
+      <strong>HYBRID · FAILURE ACTIVE</strong><br>
+      Confirmed route failures propagate into ground-dependent services.
+    </td>
+  </tr>
+</table>
 
-- cyan — healthy infrastructure
-- teal — carrying rerouted load
-- amber — strained (≥80% of simulated capacity)
-- orange-red — overloaded (>100%)
-- red — failed, with a persistent scar marking the wound
+*Open any screenshot for the full 1920 × 1080 frame.*
 
-## Simulation model
+## How it works
 
-Synthetic 26-node / 54-edge topology with fixed per-route demand. Failed demand
-reroutes over up to three diverse paths; utilisation drives strain, overload,
-and sequential protection trips (up to six cascade rounds); excess demand sheds
-as unserved. Everything derives from topology + failure list + seed, so
-scrubbing, replay and share links reproduce exactly.
+The synthetic topology contains **26 nodes and 54 routes**, with fixed baseline
+demand, capacity, and latency. When a route fails, its demand seeks up to three
+diverse surviving paths. Those paths accept load within a headroom limit;
+remaining demand becomes unserved. Overloaded links can trip in sequence,
+creating a bounded cascade.
 
-This is a teaching model, not a BGP emulator or a network-planning tool.
-Full detail: [SIMULATION_MODEL](docs/SIMULATION_MODEL.md).
+Topology, failure steps, simulation time, and seed determine the result.
+Replay and scrubbing reconstruct that state rather than approximating it.
+The orbital dependency model reads the terrestrial snapshot and reports
+ground-station reachability and its downstream effects.
 
-## Tech
+| View | What it shows |
+| --- | --- |
+| **NETWORK** | Terrestrial routes, infrastructure nodes, traffic, and failures. |
+| **ORBIT** | Synthetic orbital classes and ground links, with the terrestrial mesh dimmed. |
+| **HYBRID** | Both layers together, so terrestrial and orbital dependencies can be followed in one frame. |
 
-React 19, TypeScript, Vite, Three.js via React Three Fiber, Zustand, Vitest,
-Playwright. Static build — no backend, no API keys, no telemetry.
+View selection changes the visualization; all three domain readings remain available.
+
+### Scenarios
+
+The library has **ten entries, including seeded CHAOS MODE**. They cover cable
+cuts, exchange and cloud-region loss, DNS disruption, a simplified route leak,
+regional isolation, cascading overload, and recovery.
+
+Hover previews affected infrastructure. Click to **ARM**, inspect the projected
+end state, then press **PLAY**. The selected entry progresses through **ARMED →
+LIVE / PAUSED → DONE**. **REPLAY** reruns it; **RESET** returns the system to
+nominal. Chaos also accepts a custom seed.
+
+The Impact Intelligence console separates **FLOW**, **FAILURE**, and **STRESS**,
+then shows the orbital dependency chain and regional demand affected.
+The core reading keeps **LIVE** and **PROJECTED** visibly distinct.
+
+## Model and data limits
+
+BLACKOUT is a simplified teaching model, not a BGP emulator, digital twin, outage
+predictor, or network-planning tool. Network capacities, demand, corridor
+behavior, and resilience scores are synthetic. Geographic placement is approximate.
+
+The orbital classes, tracks, and ground stations are fictional. Terrestrial
+connectivity loss can delay telemetry, reduce mission-control reachability,
+interrupt command paths, or degrade timing/distribution and data dissemination.
+It does **not** switch spacecraft off: autonomous operation is represented
+separately and remains available.
+
+Land rendering derives from Natural Earth through world-atlas.
+See [Data Sources](docs/DATA_SOURCES.md) for provenance and licensing, and
+[Simulation Model](docs/SIMULATION_MODEL.md) for equations, assumptions, and thresholds.
 
 ## Run locally
+
+Use **Node.js 20.19+ or 22.12+** and npm (Vite's supported minimums).
 
 ```bash
 git clone https://github.com/MadB0i/BLACKOUT.git
 cd BLACKOUT
-npm install
-npm run dev     # http://127.0.0.1:5173
+npm ci
+npm run dev
 ```
 
+Open the local URL printed by Vite, normally `http://localhost:5173`.
+
 ```bash
-npm run build   # static dist/
-npm test        # unit + integration
-npm run test:e2e  # desktop + mobile Chromium (needs: npx playwright install chromium)
+npm run build    # type-check and create dist/
+npm run preview  # serve the production build locally
 ```
 
 ## Controls
 
-- Mouse: drag to rotate, scroll to zoom, click routes/nodes to inspect
-- Touch: drag to rotate, pinch to zoom, tap to inspect
-- Keyboard: `Space` play/pause · `←/→` ±2s · `R` reset · `Esc` clear selection
+| Input | Action |
+| --- | --- |
+| Mouse | Drag to rotate, scroll to zoom, click routes or nodes to inspect. |
+| Touch | Drag to rotate, pinch to zoom, tap to inspect. |
+| `Space` | Play / pause. |
+| `←` / `→` | Pause and step back / forward two simulation seconds. |
+| `R` / `Esc` | Reset / clear selection. |
+| Timeline | Scrub time, select playback speed, or jump to an event. |
 
-## Testing
+The route list provides an alternative to globe picking.
 
-Unit and integration coverage (graph, routing, cascade, seeds, share codec,
-scenario integrity) plus end-to-end journeys across desktop, mobile and
-reduced-motion paths, with screenshot QA. Details: [TESTING](docs/TESTING.md).
+## Testing and verification
 
-## Accessibility
+The verified baseline is **43 unit/integration tests and 48 E2E checks** across
+desktop and mobile Chromium. Coverage includes routing, cascades, scenario
+integrity, share-state encoding, orbital dependencies, spacecraft autonomy,
+projected/live presentation, lifecycle copy, reduced motion, and replay/reset
+determinism. TypeScript, ESLint, and the production build pass.
 
-Full keyboard operation, live regions, text (never color-only) status,
-reduced-motion mode (OS setting + manual toggle), touch-sized controls,
-and a working no-WebGL fallback. Details: [ACCESSIBILITY](docs/ACCESSIBILITY.md).
+```bash
+npm run lint
+npm run build
+npm test
+npx playwright install chromium
+npm run test:e2e
+```
+
+See [Testing](docs/TESTING.md) for the browser setup and visual checks.
+
+## Architecture
+
+React, TypeScript, and Vite provide the static application; Three.js / React
+Three Fiber render the globe; Zustand holds state. Pure functions in `src/core/`
+compute network and orbital dependency snapshots. `src/scene/` renders them,
+and `src/ui/` exposes controls and readings. Rendering never decides simulation
+outcomes. There is no backend, API key, or telemetry.
+
+[Architecture](docs/ARCHITECTURE.md) · [Visual System](docs/VISUAL_SYSTEM.md)
+
+## Accessibility and reduced motion
+
+Keyboard controls, visible focus, text status, an accessible route list, and live
+regions accompany the canvas. Reduced motion honors the OS preference and has
+an in-app toggle; it suppresses camera, traffic, and orbital animation while
+the simulation remains usable. A no-WebGL fallback preserves controls and data.
+
+The globe itself is not screen-reader navigable; the text interface provides
+the alternative. See [Accessibility](docs/ACCESSIBILITY.md) for scope and limits.
 
 ## Project status
 
-Active experiment. Docs: [ARCHITECTURE](docs/ARCHITECTURE.md) ·
-[VISUAL_SYSTEM](docs/VISUAL_SYSTEM.md) · [RELEASE_CHECKLIST](docs/RELEASE_CHECKLIST.md).
+The current product is functionally complete and verified within its educational
+scope. The model is deliberately small and inspectable; scientific limitations
+are documented rather than hidden. [Release Checklist](docs/RELEASE_CHECKLIST.md)
+tracks publishing preparation and remaining hardware profiling.
 
 ## License
 
-[MIT](LICENSE) © 2026 Rupjyoti Talukdar. Land rendering derived from Natural
-Earth (public domain) via world-atlas (ISC).
+[MIT](LICENSE) © 2026 Rupjyoti Talukdar. Natural Earth land data is public domain;
+world-atlas is ISC-licensed. See [Data Sources](docs/DATA_SOURCES.md).

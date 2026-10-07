@@ -22,6 +22,7 @@ const EARTH_FRAG = /* glsl */ `
   varying vec3 vPos;
   uniform vec3 uSunDir;
   uniform float uTime;
+  uniform float uSurfaceGain;
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 438.5453); }
   void main() {
     vec3 n = normalize(vNormal);
@@ -30,7 +31,7 @@ const EARTH_FRAG = /* glsl */ `
     float day = smoothstep(-0.25, 0.55, ndl);
     vec3 night = vec3(0.035, 0.047, 0.066);
     vec3 dayT = vec3(0.037, 0.051, 0.071);
-    vec3 col = mix(night, dayT, day * 0.85);
+    vec3 col = mix(night, dayT, day * 0.85) * uSurfaceGain;
     float polar = smoothstep(0.55, 0.95, abs(normalize(vPos).y));
     col *= 1.0 - polar * 0.35;
     float fres = pow(1.0 - abs(dot(n, viewDir)), 2.6);
@@ -59,7 +60,7 @@ const ATMO_FRAG = /* glsl */ `
   }
 `;
 
-export function EarthGlobe({ reducedMotion }: { reducedMotion: boolean }) {
+export function EarthGlobe({ reducedMotion, highQuality }: { reducedMotion: boolean; highQuality: boolean }) {
   const earthMat = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -68,10 +69,13 @@ export function EarthGlobe({ reducedMotion }: { reducedMotion: boolean }) {
         uniforms: {
           uSunDir: { value: new THREE.Vector3(-0.7, 0.25, 0.65).normalize() },
           uTime: { value: 0 },
+          uSurfaceGain: { value: 1 },
         },
       }),
     [],
   );
+  // A small surface-only correction for the brighter postprocessed tier.
+  earthMat.uniforms.uSurfaceGain.value = highQuality ? 0.82 : 1;
   const atmoMat = useMemo(
     () =>
       new THREE.ShaderMaterial({

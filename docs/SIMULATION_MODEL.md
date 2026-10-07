@@ -50,6 +50,11 @@ healthy incident edge) · `degraded` (incident strain) · `healthy`.
 - **latency shift %** — representative path-stretch estimate from rerouted share
 - **resilience 0–100** — composite: connectivity × 70, penalties per strained /
   overloaded / unreachable, headroom bonus. A teaching score, not a standard.
+- **regionImpact** — per-region ratio of *affected* demand (dropped for lack of a
+  path + load absorbed by alternates) over that region's baseline demand. Each
+  edge is counted once, attributed to the region carrying more of its demand, so
+  shares stay in 0..1 and are comparable. Sorted worst-first; the console only
+  renders regions above a 2% floor.
 
 ## Constants
 
@@ -69,3 +74,31 @@ Pathfinding is order-stable (sorted adjacency, id tie-breaks). Randomness exists
 only in chaos-plan generation and cosmetic jitter, both from seeded streams
 (`rngFor(seed, purpose)`). Same seed + same failures ⇒ identical metrics,
 events, and visuals.
+
+## Orbital dependency model (SYNTHETIC)
+
+`orbitState()` is a pure function of the terrestrial snapshot — it adds no new
+failure kinds and never changes `runSimulation`, so replay and share determinism
+are untouched.
+
+The load-bearing claim: **a terrestrial outage does not take a spacecraft
+offline.** Spacecraft keep flying and keep on-board autonomy. What degrades is
+everything the spacecraft needs the ground segment for.
+
+1. **Ground station reachability** — a station is `nominal` while the mesh reaches
+   its node over ≥1 healthy terrestrial edge, `strained` when only strained or
+   overloaded edges remain, `unreachable` when the node is failed, isolated or
+   has no surviving path.
+2. **Propagation** — per class, stations collapse into per-stage health across
+   `ground-segment → telemetry → command → timing → dissemination`:
+   - command needs **any one** usable site (redundant ground segment)
+   - telemetry and dissemination degrade **per site lost** (no diversity = late
+     or missing data)
+   - ground-segment and timing are proportional, with strained sites counted half
+3. **Aggregation** — `orbitHealth` = mean stage health across the orbital
+   classes; `controlHealth` = mission-control class reachability. The two degrade
+   independently, which is why the top strip reports MESH / ORBIT / CONTROL
+   separately.
+
+See `data/orbit.ts` for the synthetic classes and `DATA_SOURCES.md` for the
+disclosure. All orbital data is fictional and simplified.

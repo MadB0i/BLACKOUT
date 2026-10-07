@@ -3,7 +3,7 @@
 // brightness: utilisation · amber oscillation: strain · red break: failure
 // teal: rerouted load · halo: selection · shock ring: event origin.
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Html, Billboard } from '@react-three/drei';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -19,6 +19,9 @@ export const C = {
   strained: new THREE.Color('#e8a33d'),
   overloaded: new THREE.Color('#e8643d'),
   failed: new THREE.Color('#c1362f'),
+  /** scenario preview rail — amber means armed, never failed */
+  armed: new THREE.Color('#a8762c'),
+  armedHi: new THREE.Color('#e8a33d'),
   nodeWhite: new THREE.Color('#c9d5de'),
   nodeAmber: new THREE.Color('#e8a33d'),
   nodeRed: new THREE.Color('#e0574a'),
@@ -78,6 +81,12 @@ interface Props {
   onSelect: (s: SelectionRef | null) => void;
   onHoverEdge: (id: string | null) => void;
   hoverEdge: string | null;
+  /** routes the hovered/armed scenario would touch — preview highlight only */
+  previewEdges: Set<string> | null;
+  previewNodes: Set<string> | null;
+  projected: boolean;
+  /** ORBIT view steps the terrestrial mesh back */
+  dimmed: boolean;
 }
 
 export function Network(props: Props) {
@@ -86,7 +95,7 @@ export function Network(props: Props) {
       <Arcs {...props} />
       <Pulses {...props} />
       <NodeMarkers {...props} />
-      <Scars snapshot={props.snapshot} layers={props.layers} />
+      <Scars snapshot={props.snapshot} layers={props.layers} projected={props.projected} />
       <ShockFieldLive failures={props.failures} reducedMotion={props.reducedMotion} />
     </group>
   );
@@ -99,7 +108,7 @@ export function Network(props: Props) {
  */
 const scarGeom = new THREE.OctahedronGeometry(0.011);
 
-function Scars({ snapshot, layers }: { snapshot: Snapshot; layers: Layers }) {
+function Scars({ snapshot, layers, projected }: { snapshot: Snapshot; layers: Layers; projected: boolean }) {
   const failed = useMemo(
     () =>
       EDGES.filter((e) => layerOf(e.kind, layers) && snapshot.edges[e.id]?.status === 'failed'),
@@ -111,7 +120,7 @@ function Scars({ snapshot, layers }: { snapshot: Snapshot; layers: Layers }) {
         const mid = edgeGeom(e.id).mid.clone().setLength(GLOBE_R * 1.012);
         return (
           <mesh key={e.id} geometry={scarGeom} position={mid}>
-            <meshBasicMaterial color="#8f1f18" toneMapped={false} />
+            <meshBasicMaterial color={projected ? C.armedHi : '#8f1f18'} wireframe={projected} transparent opacity={projected ? 0.65 : 1} toneMapped={false} />
           </mesh>
         );
       })}
@@ -119,8 +128,22 @@ function Scars({ snapshot, layers }: { snapshot: Snapshot; layers: Layers }) {
   );
 }
 
-function arcStyle(edgeId: string, snapshot: Snapshot, hovered: boolean, selected: boolean) {
+function arcStyle(
+  edgeId: string,
+  snapshot: Snapshot,
+  hovered: boolean,
+  selected: boolean,
+  preview: boolean,
+) {
   const rt = snapshot.edges[edgeId];
+  // Scenario preview rail: restrained amber wash over routes the scenario
+  // targets. Never a failure colour — nothing has failed yet.
+  if (preview) {
+    return {
+      color: selected || hovered ? C.armedHi : C.armed,
+      opacity: selected || hovered ? 0.8 : 0.55,
+    };
+  }
   if (!rt || rt.status === 'failed')
     return { color: C.failed, opacity: selected || hovered ? 0.95 : 0.5 };
   if (rt.status === 'overloaded') return { color: C.overloaded, opacity: 0.95 };
@@ -130,7 +153,19 @@ function arcStyle(edgeId: string, snapshot: Snapshot, hovered: boolean, selected
   return { color: hovered || selected ? C.healthyHi : C.healthy, opacity: hovered || selected ? 0.9 : 0.42 };
 }
 
-function Arcs({ snapshot, layers, selection, reducedMotion, onSelect, onHoverEdge, hoverEdge }: Props) {
+function Arcs({
+  snapshot,
+  layers,
+  selection,
+  reducedMotion,
+  onSelect,
+  onHoverEdge,
+  hoverEdge,
+  previewEdges,
+  previewNodes,
+  projected,
+  dimmed,
+}: Props) {
   void reducedMotion;
   const visible = useMemo(() => EDGES.filter((e) => layerOf(e.kind, layers)), [layers]);
   return (
@@ -142,6 +177,8 @@ function Arcs({ snapshot, layers, selection, reducedMotion, onSelect, onHoverEdg
           snapshot={snapshot}
           selected={selection?.kind === 'edge' && selection.id === e.id}
           hovered={hoverEdge === e.id}
+          preview={!!(previewEdges?.has(e.id) || previewNodes?.has(e.from) || previewNodes?.has(e.to) || (projected && snapshot.edges[e.id]?.status !== 'healthy'))}
+          dimmed={dimmed}
           onSelect={onSelect}
           onHoverEdge={onHoverEdge}
         />
@@ -156,6 +193,8 @@ function ArcLine({
   snapshot,
   selected,
   hovered,
+  preview,
+  dimmed,
   onSelect,
   onHoverEdge,
 }: {
@@ -163,25 +202,35 @@ function ArcLine({
   snapshot: Snapshot;
   selected: boolean;
   hovered: boolean;
+  preview: boolean;
+  dimmed: boolean;
   onSelect: (s: SelectionRef | null) => void;
   onHoverEdge: (id: string | null) => void;
 }) {
   const g = edgeGeom(edgeId);
   const line = useMemo(() => {
-    const mat = new THREE.LineBasicMaterial({
+    const mat = new THREE.LineDashedMaterial({
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      dashSize: 0.018,
+      gapSize: 0.014,
     });
     const obj = new THREE.Line(g.lineGeom, mat);
+    obj.computeLineDistances();
     return obj;
   }, [g]);
+  useEffect(() => () => line.material.dispose(), [line]);
 
-  const st = arcStyle(edgeId, snapshot, hovered, selected);
+  const st = arcStyle(edgeId, snapshot, hovered, selected, preview);
   const failed = snapshot.edges[edgeId]?.status === 'failed';
   line.material.color.copy(st.color);
   // Failed routes stay visibly wounded (scar), not ghosted.
-  line.material.opacity = failed ? Math.max(st.opacity, 0.68) : st.opacity;
+  const base = failed && !preview ? Math.max(st.opacity, 0.68) : st.opacity;
+  line.material.gapSize = preview ? 0.014 : 0;
+  // In ORBIT view the terrestrial mesh steps back so the dependency story
+  // stays legible; failures and the active selection are never dimmed away.
+  line.material.opacity = dimmed && !failed && !selected && !hovered && !preview ? base * 0.4 : base;
 
   return (
     <primitive
@@ -210,7 +259,7 @@ interface Pulse {
   offset: number;
 }
 
-function Pulses({ snapshot, layers, reducedMotion }: Props) {
+function Pulses({ snapshot, layers, reducedMotion, dimmed, projected, previewEdges, previewNodes }: Props) {
   const ref = useRef<THREE.Points>(null!);
   const pulses = useMemo<Pulse[]>(() => {
     const list: Pulse[] = [];
@@ -247,7 +296,9 @@ function Pulses({ snapshot, layers, reducedMotion }: Props) {
     const col = new THREE.Color();
     pulses.forEach((p, i) => {
       const rt = snapshot.edges[p.edgeId];
+      const edge = edgeById(p.edgeId)!;
       if (!rt || rt.status === 'failed') col.copy(C.failed).multiplyScalar(0.0);
+      else if (projected || previewEdges?.has(p.edgeId) || previewNodes?.has(edge.from) || previewNodes?.has(edge.to)) col.copy(C.armed).multiplyScalar(0.5);
       else if (rt.status === 'overloaded') col.copy(C.overloaded);
       else if (rt.status === 'strained') col.copy(C.strained);
       else if (rt.diverted > 0.5) col.copy(C.diverted);
@@ -255,7 +306,7 @@ function Pulses({ snapshot, layers, reducedMotion }: Props) {
       colors.set([col.r, col.g, col.b], i * 3);
     });
     geom.attributes.color.needsUpdate = true;
-  }, [snapshot, pulses, colors, geom]);
+  }, [snapshot, pulses, colors, geom, projected, previewEdges, previewNodes]);
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
@@ -282,7 +333,7 @@ function Pulses({ snapshot, layers, reducedMotion }: Props) {
         sizeAttenuation
         vertexColors
         transparent
-        opacity={0.95}
+        opacity={dimmed ? 0.4 : 0.95}
         depthWrite={false}
         blending={THREE.AdditiveBlending}
       />
@@ -298,7 +349,7 @@ const nodeGeoms: Record<string, THREE.BufferGeometry> = {
   dns: new THREE.TorusGeometry(0.009, 0.0032, 8, 20),
 };
 
-function NodeMarkers({ snapshot, selection, onSelect }: Props) {
+function NodeMarkers({ snapshot, selection, onSelect, projected, previewNodes }: Props) {
   const [hover, setHover] = useState<string | null>(null);
   return (
     <group>
@@ -307,8 +358,9 @@ function NodeMarkers({ snapshot, selection, onSelect }: Props) {
         const st = snapshot.nodes[n.id] ?? 'healthy';
         const sel = selection?.kind === 'node' && selection.id === n.id;
         const hov = hover === n.id;
+        const preview = !!previewNodes?.has(n.id) || (projected && st !== 'healthy');
         const color =
-          st === 'failed' ? C.nodeRed : st === 'isolated' ? C.nodeDim : st === 'degraded' ? C.nodeAmber : C.nodeWhite;
+          preview ? C.nodeAmber : st === 'failed' ? C.nodeRed : st === 'isolated' ? C.nodeDim : st === 'degraded' ? C.nodeAmber : C.nodeWhite;
         return (
           <group key={n.id} position={pos}>
             <mesh
@@ -328,7 +380,7 @@ function NodeMarkers({ snapshot, selection, onSelect }: Props) {
                 document.body.style.cursor = 'auto';
               }}
             >
-              <meshBasicMaterial color={color} toneMapped={false} />
+              <meshBasicMaterial color={color} wireframe={preview} transparent opacity={preview ? 0.7 : 1} toneMapped={false} />
             </mesh>
             {/* invisible fat hit-target for touch */}
             <mesh
@@ -373,6 +425,9 @@ function NodeTip({ nodeId }: { nodeId: string }) {
 /** Subscribes to the live clock itself so the scene above can render at 1Hz. */
 function ShockFieldLive({ failures, reducedMotion }: { failures: Failure[]; reducedMotion: boolean }) {
   const simT = useBlackout((s) => s.simT);
+  // An armed scenario has not happened yet: no shock rings before PLAY.
+  const armed = useBlackout((s) => s.armed);
+  if (armed) return null;
   return <ShockField failures={failures} simT={simT} reducedMotion={reducedMotion} />;
 }
 function ShockField({

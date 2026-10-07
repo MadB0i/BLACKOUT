@@ -7,6 +7,10 @@ export default defineConfig({
   // Software GL (SwiftShader) makes timing jittery; retries re-run only
   // genuinely failed tests and are reported as flaky, never silent.
   retries: 1,
+  // One browser at a time. Every spec drives a WebGL canvas, and four
+  // concurrent software renderers starve each other's frame loops — that
+  // contention, not the app, is what made the perf probe flaky.
+  workers: 1,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   outputDir: 'test-results',
   expect: { timeout: 20000 },
